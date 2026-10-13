@@ -1,0 +1,10 @@
+C:\Users\aliso\OneDrive\Área de Trabalho\ZombiesMod\ZombiesMod.SHVDN3\bin\Release\ZombiesMod.dll
+C:\Users\aliso\OneDrive\Área de Trabalho\ZombiesMod\ZombiesMod.SHVDN3\bin\Release\ZombiesMod.pdb
+C:\Users\aliso\OneDrive\Área de Trabalho\ZombiesMod\ZombiesMod.SHVDN3\obj\Release\ZombiesMod.csproj.AssemblyReference.cache
+C:\Users\aliso\OneDrive\Área de Trabalho\ZombiesMod\ZombiesMod.SHVDN3\obj\Release\ZombiesMod.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\aliso\OneDrive\Área de Trabalho\ZombiesMod\ZombiesMod.SHVDN3\obj\Release\ZombiesMod.AssemblyInfoInputs.cache
+C:\Users\aliso\OneDrive\Área de Trabalho\ZombiesMod\ZombiesMod.SHVDN3\obj\Release\ZombiesMod.AssemblyInfo.cs
+C:\Users\aliso\OneDrive\Área de Trabalho\ZombiesMod\ZombiesMod.SHVDN3\obj\Release\ZombiesMod.csproj.CoreCompileInputs.cache
+C:\Users\aliso\OneDrive\Área de Trabalho\ZombiesMod\ZombiesMod.SHVDN3\obj\Release\ZombiesMod.dll
+C:\Users\aliso\OneDrive\Área de Trabalho\ZombiesMod\ZombiesMod.SHVDN3\obj\Release\ZombiesMod.pdb
+C:\Users\aliso\OneDrive\Área de Trabalho\ZombiesMod\ZombiesMod.SHVDN3\bin\Release\ZombiesMod_lang\pt.json

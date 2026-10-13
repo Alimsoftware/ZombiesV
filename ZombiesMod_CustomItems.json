@@ -1,0 +1,58 @@
+// =============================================================================
+// ZombiesMod — catálogo de itens do jogador
+//
+// Tudo o que escreveres neste ficheiro passa a existir no mod, sem mexer no código.
+// Cada item é descrito por várias chaves com o formato:
+//
+//     "item.<Chave>.<campo>": "<valor>"
+//
+// <Chave> é o Id do item — o nome que aparece no inventário e que fica gravado no
+// save. Escolhe uma Chave única e sem pontos. Todos os campos são opcionais, exceto
+// "model" nos objetos construíveis:
+//
+//   type       "resource"  -> ingrediente/recurso (aparece no separador Recursos)
+//              "buildable" -> objeto que se coloca no mundo (por omissão)
+//   name       Nome visível. Sem isto, mostra-se a própria Chave.
+//   desc       Descrição mostrada no inventário.
+//   max        Quantidade máxima (por omissão 10; recursos 25).
+//   amount     Quantidade com que começas (por omissão 0).
+//   model      (construível) Nome do modelo/prop do GTA V. OBRIGATÓRIO.
+//   snap       (construível) "true" para encaixar borda a borda com outras peças.
+//   door       (construível) "true" se for uma porta.
+//   interact   (construível) "true" para abrir o menu ao interagir com a peça.
+//   pickup     (construível) "true" (por omissão) para poder recolher a peça.
+//   blip       (construível) Sprite do blip no mapa (1 = sem blip).
+//   blipcolor  (construível) Cor do blip.
+//   offset     (construível) Deslocamento ao assentar no chão, formato "x,y,z".
+//   recipe     Ingredientes, formato "Recurso:qtd; Recurso:qtd". Os recursos têm
+//              de existir já (Wood, Metal, Binding, Cloth, Battery, Plastic...).
+//              Sem recipe, o objeto constrói-se de graça.
+//
+// Os nomes de modelos existem no ObjectList.ini (dump de objetos do GTA V).
+// =============================================================================
+{
+  // Exemplo 1 — um recurso novo (descomenta para usar)
+  // "item.Nail.type": "resource",
+  // "item.Nail.name": "Prego",
+  // "item.Nail.desc": "Um prego de aço.",
+  // "item.Nail.max": "50",
+
+  // Exemplo 2 — um objeto construível novo (descomenta para usar)
+  // "item.Wood Fence.type": "buildable",
+  // "item.Wood Fence.name": "Cerca de Madeira",
+  // "item.Wood Fence.desc": "Uma cerca que bloqueia a passagem.",
+  // "item.Wood Fence.model": "prop_fncwood_02b",
+  // "item.Wood Fence.max": "20",
+  // "item.Wood Fence.snap": "true",
+  // "item.Wood Fence.recipe": "Wood:4; Binding:2"
+
+// Exemplo — Escada construível
+  "item.Ladder.type": "buildable",
+  "item.Ladder.name": "Escada de Cu",
+  "item.Ladder.desc": "Uma escada útil para alcançar telhados e locais altos.",
+  "item.Ladder.model": "0xEF211019",
+  "item.Ladder.max": "5",
+  "item.Ladder.snap": "true",
+  "item.Ladder.pickup": "true",
+  "item.Ladder.recipe": "Metal:6; Wood:2"
+}
