@@ -5,3 +5,4 @@ graphify-out/
 *.bak-*
 *.user
 .vs/
+assets/
