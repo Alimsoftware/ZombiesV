@@ -50,7 +50,7 @@
   "item.Ladder.type": "buildable",
   "item.Ladder.name": "Escada de Cu",
   "item.Ladder.desc": "Uma escada útil para alcançar telhados e locais altos.",
-  "item.Ladder.model": "0xEF211019",
+  "item.Ladder.model": "prop_air_stair_04a",
   "item.Ladder.max": "5",
   "item.Ladder.snap": "true",
   "item.Ladder.pickup": "true",

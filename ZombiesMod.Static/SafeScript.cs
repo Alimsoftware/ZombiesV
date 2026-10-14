@@ -31,11 +31,12 @@ namespace ZombiesMod.Static;
 public abstract class SafeScript : Script
 {
     /// <summary>
-    /// <c>NonPublic</c> porque os handlers do mod são todos <c>private</c>. A reflexão
+    /// <c>NonPublic</c> porque os handlers do mod são todos <c>private</c>; <c>Static</c> porque
+    /// alguns (RecruitPeds) são <c>private static</c> e sem esta flag nunca eram ligados. A reflexão
     /// faz-se uma vez por script, no construtor — irrelevante ao lado de um frame do GTA.
     /// </summary>
     private const BindingFlags HandlerFlags =
-        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
 
     /// <summary>Assinatura de <c>(object sender, EventArgs e)</c>, a do Tick.</summary>
     private static readonly Type[] EventSignature = { typeof(object), typeof(EventArgs) };
@@ -99,6 +100,9 @@ public abstract class SafeScript : Script
 
         // CreateDelegate aceita também métodos estáticos (ignora o primeiro argumento),
         // o que cobre scripts como o RecruitPeds que declaram OnTick como private static.
-        return (THandler)Delegate.CreateDelegate(typeof(THandler), this, method);
+        // Estático: sem alvo (com «this» o CreateDelegate recusa e o script nem arranca).
+        return method.IsStatic
+            ? (THandler)Delegate.CreateDelegate(typeof(THandler), method)
+            : (THandler)Delegate.CreateDelegate(typeof(THandler), this, method);
     }
 }

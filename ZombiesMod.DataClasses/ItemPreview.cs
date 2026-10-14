@@ -60,7 +60,7 @@ public class ItemPreview
 	/// </summary>
 	private const float MaxSnapDistance = 1.75f;
 	private const float RotationStepDegrees = 45f;
-	private const float FineRotationStepDegrees = 15f;
+	private const float FreeRotationStepDegrees = 1f;
 	private const float FastMultiplier = 3f;
 
 	/// <summary>
@@ -329,7 +329,7 @@ public class ItemPreview
 	/// Aceita "0x..." (hex) ou uma cadeia de dígitos (decimal). Devolve
 	/// false para nomes de modelo normais, que têm de passar por GET_HASH_KEY.
 	/// </summary>
-	private static bool TryParsePropHash(string value, out uint hash)
+	internal static bool TryParsePropHash(string value, out uint hash)
 	{
 		hash = 0u;
 		if (string.IsNullOrEmpty(value))
@@ -603,10 +603,9 @@ public class ItemPreview
 		bool fine = Controls.IsDisabledControlPressed(ControlType.PlayerControl, FastKey);
 		float multiplier = fine ? FastMultiplier : 1f;
 
-		// Rotação por passos: cada toque roda um incremento fixo (45°, ou 15° com o
-		// modificador em baixo), para as peças ficarem a direito. Já não há rotação
-		// contínua — era o que deixava tudo ligeiramente torto.
-		float step = fine ? FineRotationStepDegrees : RotationStepDegrees;
+		// Rotação por passos de 45° a direito; com o modificador (shift) é livre, em
+		// passos de 1° por toque da roda, para o ajuste fino.
+		float step = fine ? FreeRotationStepDegrees : RotationStepDegrees;
 
 		if (Controls.IsDisabledControlJustPressed(ControlType.PlayerControl, RotateCwKey))
 		{

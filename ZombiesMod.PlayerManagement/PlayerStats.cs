@@ -140,7 +140,8 @@ public class PlayerStats : SafeScript
 		{
 			StatDisplayItem statDisplayItem = _statDisplay[i];
 			Stat stat = statDisplayItem.Stat;
-			statDisplayItem.Bar.Progress = stat.Value;
+			// LemonUI: Progress é 0..100 (e lança fora disso); o valor do stat é 0..MaxVal.
+			statDisplayItem.Bar.Progress = Math.Max(0f, Math.Min(100f, stat.Value / stat.MaxVal * 100f));
 			HandleReductionStat(stat, "Fome", Lang.T("msg.hunger_critical"), _hungerReductionMultiplier, ref _hungerDamageTimer, ref _hungerSustainTimer);
 			HandleReductionStat(stat, "Sede", Lang.T("msg.thirst_critical"), _thirstReductionMultiplier, ref _thirstDamageTimer, ref _thirstSustainTimer);
 			HandleStamina(stat);
@@ -149,7 +150,7 @@ public class PlayerStats : SafeScript
 
 	private void HandleStamina(Stat stat)
 	{
-		if (stat.Name != "Stamina")
+		if (stat.Name != "Vigor")
 		{
 			return;
 		}

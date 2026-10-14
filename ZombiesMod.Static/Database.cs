@@ -19,12 +19,6 @@ public static class Database
 
 	public static WeaponHash[] WeaponHashes;
 
-	public static VehicleClass[] LandVehicleClasses;
-
-	public static VehicleHash[] VehicleHashes;
-
-	public static Model[] WrckedVehicleModels;
-
 	public static Vector3[] AnimalSpawns;
 
 	public static Vector3[] Shops247Locations;
@@ -65,19 +59,6 @@ public static class Database
 		}
 	}
 
-	public static VehicleHash GetRandomVehicleByClass(VehicleClass vClass)
-	{
-		if (!(Enum.GetValues(typeof(VehicleHash)) is VehicleHash[] source))
-		{
-			return VehicleHash.Adder;
-		}
-		VehicleHash[] array = source.Where((VehicleHash h) =>
-		{
-			return VehicleExtended.GetModelClass((Model)(h)) == vClass;
-		}).ToArray();
-		return array[Random.Next(array.Length)];
-	}
-
 	public static Model GetRandomVehicleModel()
 	{
 		Model val = new Model(VehicleModels[Random.Next(VehicleModels.Length)]);
@@ -94,45 +75,6 @@ public static class Database
 			WeaponHash.GolfClub,
 			WeaponHash.Bat,
 			WeaponHash.MicroSMG
-		};
-		LandVehicleClasses = new VehicleClass[6]
-		{
-			VehicleClass.Coupes,
-			VehicleClass.Motorcycles,
-			VehicleClass.Sedans,
-			VehicleClass.SUVs,
-			VehicleClass.Vans,
-			VehicleClass.Sports
-		};
-		VehicleHashes = new VehicleHash[8]
-		{
-			VehicleHash.BfInjection,
-			VehicleHash.Bifta,
-			VehicleHash.Blazer,
-			VehicleHash.Bodhi2,
-			VehicleHash.Dune,
-			VehicleHash.Insurgent,
-			VehicleHash.RancherXL,
-			VehicleHash.Rebel
-		};
-		WrckedVehicleModels = new Model[16]
-		{
-			(Model)("prop_rub_carwreck_2"),
-			(Model)("prop_rub_carwreck_3"),
-			(Model)("prop_rub_carwreck_4"),
-			(Model)("prop_rub_carwreck_5"),
-			(Model)("prop_rub_carwreck_6"),
-			(Model)("prop_rub_carwreck_7"),
-			(Model)("prop_rub_carwreck_8"),
-			(Model)("prop_rub_carwreck_9"),
-			(Model)("prop_rub_carwreck_10"),
-			(Model)("prop_rub_carwreck_11"),
-			(Model)("prop_rub_carwreck_12"),
-			(Model)("prop_rub_carwreck_13"),
-			(Model)("prop_rub_carwreck_14"),
-			(Model)("prop_rub_carwreck_15"),
-			(Model)("prop_rub_carwreck_16"),
-			(Model)("prop_rub_carwreck_17")
 		};
 		AnimalSpawns = new Vector3[6]
 		{

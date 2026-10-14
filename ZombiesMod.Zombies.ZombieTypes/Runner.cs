@@ -20,6 +20,11 @@ public class Runner : ZombiePed
 
 	private DateTime _nextJumpAttack = DateTime.MinValue;
 
+	/// <summary>Uma tentativa de salto por ciclo de ataque (~1 s), nao uma por frame.</summary>
+	private const double JumpRollIntervalSeconds = 1.2;
+
+	private DateTime _nextJumpRoll = DateTime.MinValue;
+
 	private bool CanJumpAttack => DateTime.UtcNow >= _nextJumpAttack;
 
 	public override bool PlayAudio { get; set; } = true;
@@ -41,7 +46,7 @@ public class Runner : ZombiePed
 				_ped.Task.PlayAnimation("amb@world_human_bum_wash@male@high@idle_a", "idle_b", 8f, -1, (AnimationFlags)1);
 			}
 		}
-		else if (CanJumpAttack && Database.Random.NextDouble() < 0.30000001192092896 && !target.IsPerformingStealthKill && !target.IsGettingUp && !target.IsRagdoll)
+		else if (CanJumpAttack && RollJumpAttack() && !target.IsPerformingStealthKill && !target.IsGettingUp && !target.IsRagdoll)
 		{
 			_ped.Jump();
 			Ped ped = _ped;
@@ -59,6 +64,16 @@ public class Runner : ZombiePed
 			}
 			InfectTarget(target);
 		}
+	}
+
+	private bool RollJumpAttack()
+	{
+		if (DateTime.UtcNow < _nextJumpRoll)
+		{
+			return false;
+		}
+		_nextJumpRoll = DateTime.UtcNow.AddSeconds(JumpRollIntervalSeconds);
+		return Database.Random.NextDouble() < 0.3;
 	}
 
 	public override void OnGoToTarget(Ped target)

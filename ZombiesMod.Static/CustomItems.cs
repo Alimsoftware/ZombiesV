@@ -31,7 +31,7 @@ namespace ZombiesMod.Static;
 public static class CustomItems
 {
 	/// <summary>Nome do ficheiro, criado ao lado dos restantes dados do mod.</summary>
-	public const string FileName = "ZombiesMod_CustomItems.json";
+	public const string FileName = "CustomItems.json";
 
 	/// <summary>Prefixo das chaves: <c>"item.&lt;Chave&gt;.&lt;campo&gt;"</c>.</summary>
 	private const string Prefix = "item.";
@@ -78,6 +78,7 @@ public static class CustomItems
 
 		List<CustomItemDefinition> definitions = GroupDefinitions(entries);
 		var created = new List<KeyValuePair<CustomItemDefinition, InventoryItemBase>>();
+		int skipped = 0;
 
 		foreach (CustomItemDefinition definition in definitions)
 		{
@@ -95,6 +96,7 @@ public static class CustomItems
 			InventoryItemBase item = CreateItem(definition);
 			if (item == null)
 			{
+				skipped++;
 				continue;
 			}
 
@@ -113,6 +115,11 @@ public static class CustomItems
 		{
 			ModLogger.Info("CustomItems", created.Count + " item(ns) personalizado(s) carregado(s) de " + FileName + ".");
 			SafeNotify(Lang.T("notify.customitems_loaded", created.Count));
+		}
+
+		if (skipped > 0)
+		{
+			SafeNotify("~y~Itens personalizados~s~: " + skipped + " ignorado(s). Veja o log do mod.");
 		}
 
 		return created.Count;
@@ -141,6 +148,12 @@ public static class CustomItems
 			return null;
 		}
 
+		if (!ModelExists(definition.Model))
+		{
+			ModLogger.Warn("CustomItems", "o modelo \"" + definition.Model + "\" de \"" + definition.Key + "\" não existe no jogo (procure o nome na ObjectList; use prop_*) — ignorado.");
+			return null;
+		}
+
 		return new BuildableInventoryItem(
 			definition.Amount ?? 0,
 			definition.Max ?? 10,
@@ -154,6 +167,24 @@ public static class CustomItems
 			isDoor: definition.Door ?? false,
 			canBePickedUp: definition.Pickup ?? true,
 			isSnappable: definition.Snap ?? false);
+	}
+
+	// Mesma regra do ItemPreview: "0x..."/decimal é hash directo, o resto passa por GET_HASH_KEY.
+	// Se o native falhar, o item entra e a falha aparece na colocação, como antes.
+	private static bool ModelExists(string name)
+	{
+		try
+		{
+			uint hash = ZombiesMod.DataClasses.ItemPreview.TryParsePropHash(name, out uint direct)
+				? direct
+				: GTA.Native.Function.Call<uint>(GTA.Native.Hash.GET_HASH_KEY, name);
+			return new Model((int)hash).IsValid;
+		}
+		catch (Exception ex)
+		{
+			ModLogger.Error("CustomItems.ModelExists", ex);
+			return true;
+		}
 	}
 
 	private static void ResolveRecipe(CustomItemDefinition definition, InventoryItemBase item, Inventory inventory)
@@ -346,6 +377,7 @@ public static class CustomItems
 	{
 		try
 		{
+			Directory.CreateDirectory(Path.GetDirectoryName(path));
 			File.WriteAllText(path, Template, new UTF8Encoding(false));
 			ModLogger.Info("CustomItems", "criado o modelo de exemplo " + FileName + ".");
 		}
@@ -411,7 +443,7 @@ public static class CustomItems
 				case "description":
 					Description = value;
 					break;
-				case "model":
+				case "model": case "hash": // hash directo ("0x...") vai pelo mesmo campo; vale o último
 					Model = value.Trim();
 					break;
 				case "recipe":

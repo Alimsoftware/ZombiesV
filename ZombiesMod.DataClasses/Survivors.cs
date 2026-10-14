@@ -16,6 +16,9 @@ public abstract class Survivors
 
 	public static float DeleteRange = 1000f;
 
+	/// <summary>Se definido (encontro procedural), o evento nasce aqui em vez de num ponto aleatório.</summary>
+	public Vector3? Origin { get; set; }
+
 	public Ped PlayerPed => Database.PlayerPed;
 
 	public Vector3 PlayerPosition
@@ -43,7 +46,8 @@ public abstract class Survivors
 
 	public bool IsValidSpawn(Vector3 spawn)
 	{
-		if (!(spawn.VDist(PlayerPosition) < MinSpawnDistance) && !ZombieVehicleSpawner.Instance.IsInvalidZone(spawn))
+		float minDistance = Origin.HasValue ? 60f : MinSpawnDistance;
+		if (!(spawn.VDist(PlayerPosition) < minDistance) && !ZombieVehicleSpawner.Instance.IsInvalidZone(spawn))
 		{
 			return true;
 		}
@@ -53,6 +57,10 @@ public abstract class Survivors
 
 	public Vector3 GetSpawnPoint()
 	{
+		if (Origin.HasValue)
+		{
+			return Origin.Value;
+		}
 		Vector3 playerPosition = PlayerPosition;
 		Vector3 val = playerPosition.Around(MaxSpawnDistance);
 		return World.GetNextPositionOnStreet(val);

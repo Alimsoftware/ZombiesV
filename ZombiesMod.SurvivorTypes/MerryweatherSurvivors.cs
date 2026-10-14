@@ -130,7 +130,7 @@ public class MerryweatherSurvivors : Survivors
 		{
 			MenuConrtoller.BarPool.Add((TimerBar)(object)_timerBar);
 		}
-		_timerBar.Progress = _currentTime / (float)_timeOut;
+		_timerBar.Progress = Math.Max(0f, Math.Min(100f, _currentTime / (float)_timeOut * 100f));
 		_currentTime -= Game.LastFrameTime;
 		if (!(_currentTime > 0f))
 		{

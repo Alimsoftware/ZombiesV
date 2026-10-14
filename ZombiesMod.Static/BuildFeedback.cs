@@ -1,5 +1,6 @@
 using System;
 using GTA;
+using GTA.Math;
 
 namespace ZombiesMod.Static;
 
@@ -70,6 +71,45 @@ public static class BuildFeedback
 			default:
 				ghost.Opacity = GhostOpacity;
 				break;
+		}
+
+		DrawBounds(ghost, status != PlacementStatus.Blocked);
+	}
+
+	/// <summary>
+	/// Caixa verde (da para colocar) ou vermelha (nao da) a volta do ghost: um prop nao se
+	/// pinta, entao o contorno do modelo faz o papel da cor.
+	/// </summary>
+	private static readonly Vector3[] BoundsCorners = new Vector3[8];
+
+	private static void DrawBounds(Prop ghost, bool valid)
+	{
+		Vector3 min;
+		Vector3 max;
+		ghost.Model.GetDimensions(out min, out max);
+		System.Drawing.Color color = valid
+			? System.Drawing.Color.FromArgb(255, 60, 230, 60)
+			: System.Drawing.Color.FromArgb(255, 235, 50, 50);
+
+		Vector3[] c = BoundsCorners;
+		for (int i = 0; i < 8; i++)
+		{
+			c[i] = ghost.GetOffsetPosition(new Vector3(
+				(i & 1) == 0 ? min.X : max.X,
+				(i & 2) == 0 ? min.Y : max.Y,
+				(i & 4) == 0 ? min.Z : max.Z));
+		}
+
+		// Arestas: pares de cantos que diferem num so bit.
+		for (int i = 0; i < 8; i++)
+		{
+			for (int bit = 1; bit <= 4; bit <<= 1)
+			{
+				if ((i & bit) == 0)
+				{
+					World.DrawLine(c[i], c[i | bit], color);
+				}
+			}
 		}
 	}
 

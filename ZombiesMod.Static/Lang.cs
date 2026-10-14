@@ -34,8 +34,8 @@ public static class Lang
 	/// <summary>Idioma de recurso: se a chave não existir no idioma ativo, tenta-se este.</summary>
 	public const string FallbackLanguage = "en";
 
-	/// <summary>Nome do diretório onde vivem os ficheiros <c>.json</c>, ao lado do DLL.</summary>
-	public const string LanguagesFolderName = "ZombiesMod_lang";
+	/// <summary>Diretório dos ficheiros <c>.json</c>, relativo à pasta do DLL (<c>scripts</c>).</summary>
+	public const string LanguagesFolderName = "ZombiesMod/lang";
 
 	private static readonly object Sync = new object();
 

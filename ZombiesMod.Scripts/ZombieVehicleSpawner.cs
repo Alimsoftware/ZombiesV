@@ -12,275 +12,420 @@ namespace ZombiesMod.Scripts;
 
 public class ZombieVehicleSpawner : SafeScript, ISpawner
 {
-	public const int SpawnBlockingDistance = 150;
+    public const int SpawnBlockingDistance = 150;
 
-	private readonly int _maxVehicles = 10;
+    private readonly int _maxVehicles = 10;
 
-	private readonly int _maxZombies = 30;
+    private readonly int _maxZombies = 30;
 
-	private readonly int _minVehicles = 1;
+    private readonly int _minVehicles = 1;
 
-	private readonly int _minZombies = 7;
+    private readonly int _minZombies = 7;
 
-	private readonly int _spawnDistance = 75;
+    private readonly int _spawnDistance = 75;
 
-	private readonly int _minSpawnDistance = 50;
+    private readonly int _minSpawnDistance = 50;
 
-	private readonly int _zombieHealth = 750;
+    private readonly int _zombieHealth = 750;
 
-	private bool _nightFall;
+    private bool _nightFall;
 
-	private List<Ped> _peds = new List<Ped>();
+    // Distância a que uma horda da semente acorda; abaixo dos 120 m em que o ZombiePed apaga o que está longe.
+    private const float HordeTriggerDistance = 110f;
 
-	private List<Vehicle> _vehicles = new List<Vehicle>();
+    private readonly bool _procedural = true;
 
-	private readonly VehicleClass[] _classes;
+    // Orçamento por tick (100 ms): povoar aos poucos evita o soluço de criar dezenas de peds num frame.
+    private const int MaxPedSpawnsPerTick = 2;
 
-	public string[] InvalidZoneNames;
+    private const int MaxVehicleSpawnsPerTick = 1;
 
-	public bool Spawn { get; set; }
+    private const int MaxHordeSpawnsPerTick = 3;
 
-	public SpawnBlocker SpawnBlocker { get; }
+    /// <summary>Fração de uma horda que tem de morrer às mãos do jogador para a célula ficar limpa.</summary>
+    private const float HordeClearedRatio = 0.8f;
 
-	private static Ped PlayerPed => Database.PlayerPed;
+    private sealed class Horde
+    {
+        public int CellX;
+        public int CellY;
+        public int ToSpawn;
+        public int Spawned;
+        public Vector3 Center;
+        public readonly List<Ped> Peds = new List<Ped>();
+        public readonly HashSet<int> Killed = new HashSet<int>();
+    }
 
-	private static Vector3 PlayerPosition
-	{
-		get
-		{
-			return Database.PlayerPosition;
-		}
-	}
+    private readonly List<Horde> _hordes = new List<Horde>();
 
-	public static ZombieVehicleSpawner Instance { get; private set; }
+    private List<Ped> _peds = new List<Ped>();
 
-	public ZombieVehicleSpawner()
-	{
-		_classes = new VehicleClass[3]
-		{
-			VehicleClass.OffRoad,
-			VehicleClass.Muscle,
-			VehicleClass.Sedans
-		};
-		InvalidZoneNames = new string[8] { "Los Santos International Airport", "Fort Zancudo", "Bolingbroke Penitentiary", "Davis Quartz", "Palmer-Taylor Power Station", "RON Alternates Wind Farm", "Terminal", "Humane Labs and Research" };
-		SpawnBlocker = new SpawnBlocker();
-		Instance = this;
-		_minZombies = ((Script)this).Settings.GetValue<int>("spawning", "min_spawned_zombies", _minZombies);
-		_maxZombies = ((Script)this).Settings.GetValue<int>("spawning", "max_spawned_zombies", _maxZombies);
-		_minVehicles = ((Script)this).Settings.GetValue<int>("spawning", "min_spawned_vehicles", _minVehicles);
-		_maxVehicles = ((Script)this).Settings.GetValue<int>("spawning", "max_spawned_vehicles", _maxVehicles);
-		_spawnDistance = ((Script)this).Settings.GetValue<int>("spawning", "spawn_distance", _spawnDistance);
-		_minSpawnDistance = ((Script)this).Settings.GetValue<int>("spawning", "min_spawn_distance", _minSpawnDistance);
-		_zombieHealth = ((Script)this).Settings.GetValue<int>("zombies", "zombie_health", _zombieHealth);
-		((Script)this).Settings.SetValue<int>("spawning", "min_spawned_zombies", _minZombies);
-		((Script)this).Settings.SetValue<int>("spawning", "max_spawned_zombies", _maxZombies);
-		((Script)this).Settings.SetValue<int>("spawning", "min_spawned_vehicles", _minVehicles);
-		((Script)this).Settings.SetValue<int>("spawning", "max_spawned_vehicles", _maxVehicles);
-		((Script)this).Settings.SetValue<int>("spawning", "spawn_distance", _spawnDistance);
-		((Script)this).Settings.SetValue<int>("spawning", "min_spawn_distance", _minSpawnDistance);
-		((Script)this).Settings.SetValue<int>("zombies", "zombie_health", _zombieHealth);
-		((Script)this).Settings.Save();
-		WrapEvents();
-		((Script)this).Aborted += (object sender, EventArgs args) =>
-		{
-			ClearAll();
-		};
-		Interval = 100;
-	}
+    private List<Vehicle> _vehicles = new List<Vehicle>();
 
-	private void OnTick(object sender, EventArgs e)
-	{
-		if (Spawn)
-		{
-			if (!MenuConrtoller.ObjectPool.AreAnyVisible)
-			{
-				if (ZombieCreator.IsNightFall() && !_nightFall)
-				{
-					UiExtended.DisplayHelpTextThisFrame(Lang.T("help.nightfall_warning"));
-					_nightFall = true;
-				}
-				else if (!ZombieCreator.IsNightFall())
-				{
-					_nightFall = false;
-				}
-			}
-			SpawnVehicles();
-			SpawnPeds();
-		}
-		else
-		{
-			ClearAll();
-		}
-	}
+    private readonly VehicleClass[] _classes;
 
-	private void SpawnPeds()
-	{
-		_peds = _peds.Where(Exists).ToList();
-		if (_peds.Count >= _maxZombies)
-		{
-			return;
-		}
-		for (int i = 0; i < _maxZombies - _peds.Count; i++)
-		{
-			Vector3 position = ((Entity)PlayerPed).Position;
-			Vector3 val = position.Around((float)_spawnDistance);
-			val = World.GetNextPositionOnStreet(val);
-			if (!IsValidSpawn(val))
-			{
-				break;
-			}
-			Vector3 val2 = val.Around(5f);
-			if (val2.IsOnScreen() || val2.VDist(PlayerPosition) < (float)_minSpawnDistance)
-			{
-				break;
-			}
-			Ped val3 = World.CreateRandomPed(val2);
-			if (!((Entity)(object)val3 == (Entity)null))
-			{
-				_peds.Add(ZombieCreator.InfectPed(val3, _zombieHealth));
-			}
-		}
-	}
+    public string[] InvalidZoneNames;
 
-	private void SpawnVehicles()
-	{
-		_vehicles = _vehicles.Where(Exists).ToList();
-		if (_vehicles.Count >= _maxVehicles)
-		{
-			return;
-		}
-		for (int i = 0; i < _maxVehicles - _vehicles.Count; i++)
-		{
-			Vector3 position = ((Entity)PlayerPed).Position;
-			Vector3 val = position.Around((float)_spawnDistance);
-			val = World.GetNextPositionOnStreet(val);
-			if (IsInvalidZone(val) || !IsValidSpawn(val))
-			{
-				break;
-			}
-			Vector3 val2 = val.Around(2.5f);
-			if (val2.IsOnScreen() || val2.VDist(PlayerPosition) < (float)_minSpawnDistance)
-			{
-				break;
-			}
-			Model randomVehicleModel = Database.GetRandomVehicleModel();
+    public bool Spawn { get; set; }
 
-			// EXEMPLO — SafeExecutor.Run<T> à volta de um spawn.
-			// World.CreateVehicle é um native: pode falhar (modelo ainda não carregado,
-			// posicao invalida) e a ScriptDomain abortaria o script inteiro. Com Run<T>
-			// fica registado e devolve null, pelo que o null-check de baixo continua a
-			// valer exactamente como estava.
-			Vehicle val3 = SafeExecutor.Run("ZombieVehicleSpawner.SpawnVehicle",
-				() => World.CreateVehicle(randomVehicleModel, val2), defaultValue: null);
+    public SpawnBlocker SpawnBlocker { get; }
 
-			if (!((Entity)(object)val3 == (Entity)null))
-			{
-				// EXEMPLO — SafeExecutor.Run (void) à volta de um bloco de natives.
-				// Apanha só o estrago cosmético: se um native falhar a meio, o veiculo
-				// fica pela metade mas o _vehicles.Add() de baixo continua a correr.
-				SafeExecutor.Run("ZombieVehicleSpawner.DamageVehicle", () =>
-				{
-					val3.EngineHealth = 0f;
-					((Entity)val3).MarkAsNoLongerNeeded();
-					val3.DirtLevel = 14f;
-					SmashRandomWindow(val3);
-					if (Database.Random.NextDouble() < 0.5)
-					{
-						SmashRandomWindow(val3);
-					}
-					if (Database.Random.NextDouble() < 0.20000000298023224)
-					{
-						OpenRandomDoor(val3);
-					}
-					((Entity)val3).Heading = Database.Random.Next(1, 360);
-				});
+    private static Ped PlayerPed => Database.PlayerPed;
 
-				// Isto fica fora do SafeExecutor de proposito: e registo interno, nao um
-				// native, e se nao correr o mod perde o controlo do veiculo para sempre.
-				_vehicles.Add(val3);
-			}
-		}
-	}
+    private static Vector3 PlayerPosition
+    {
+        get { return Database.PlayerPosition; }
+    }
 
-	private static void OpenRandomDoor(Vehicle veh)
-	{
-		VehicleDoor[] doors = veh.Doors.ToArray();
+    public static ZombieVehicleSpawner Instance { get; private set; }
 
-		// Motos e alguns veículos não têm portas: Random.Next(0) lança
-		// ArgumentOutOfRangeException e rebentava o spawner todo.
-		if (doors.Length == 0)
-		{
-			return;
-		}
+    public ZombieVehicleSpawner()
+    {
+        _classes = new VehicleClass[3]
+        {
+            VehicleClass.OffRoad,
+            VehicleClass.Muscle,
+            VehicleClass.Sedans,
+            //VehicleClass.Compacts,
+            //VehicleClass.Utility
+        };
+        InvalidZoneNames = new string[8]
+        {
+            "Los Santos International Airport",
+            "Fort Zancudo",
+            "Bolingbroke Penitentiary",
+            "Davis Quartz",
+            "Palmer-Taylor Power Station",
+            "RON Alternates Wind Farm",
+            "Terminal",
+            "Humane Labs and Research",
+        };
+        SpawnBlocker = new SpawnBlocker();
+        Instance = this;
 
-		VehicleDoor val = doors[Database.Random.Next(doors.Length)];
-		val.Open(false, true);
-	}
+        _minZombies = Settings.GetValue("spawning", "min_spawned_zombies", _minZombies);
+        _maxZombies = Settings.GetValue("spawning", "max_spawned_zombies", _maxZombies);
+        _minVehicles = Settings.GetValue("spawning", "min_spawned_vehicles", _minVehicles);
+        _maxVehicles = Settings.GetValue("spawning", "max_spawned_vehicles", _maxVehicles);
+        _spawnDistance = Settings.GetValue("spawning", "spawn_distance", _spawnDistance);
+        _minSpawnDistance = Settings.GetValue("spawning", "min_spawn_distance", _minSpawnDistance);
+        _zombieHealth = Settings.GetValue("zombies", "zombie_health", _zombieHealth);
+        _procedural = Settings.GetValue("spawning", "procedural_spawning", _procedural);
 
-	private static void SmashRandomWindow(Vehicle veh)
-	{
-		VehicleWindowIndex[] source =
-		{
-			VehicleWindowIndex.FrontLeftWindow,
-			VehicleWindowIndex.FrontRightWindow,
-			VehicleWindowIndex.BackLeftWindow,
-			VehicleWindowIndex.BackRightWindow
-		};
-		source = source.Where((VehicleWindowIndex v) =>
-		{
-			return Function.Call<bool>(Hash.IS_VEHICLE_WINDOW_INTACT, new InputArgument[2]
-			{
-				((Entity)veh).Handle,
-				(int)v
-			});
-		}).ToArray();
+        Settings.SetValue("spawning", "min_spawned_zombies", _minZombies);
+        Settings.SetValue("spawning", "max_spawned_zombies", _maxZombies);
+        Settings.SetValue("spawning", "min_spawned_vehicles", _minVehicles);
+        Settings.SetValue("spawning", "max_spawned_vehicles", _maxVehicles);
+        Settings.SetValue("spawning", "spawn_distance", _spawnDistance);
+        Settings.SetValue("spawning", "min_spawn_distance", _minSpawnDistance);
+        Settings.SetValue("zombies", "zombie_health", _zombieHealth);
+        Settings.SetValue("spawning", "procedural_spawning", _procedural);
+        Settings.Save();
+        WrapEvents();
+        Aborted += (sender, args) =>
+        {
+            ClearAll();
+        };
+        Interval = 100;
+    }
 
-		// Se todas as janelas já estiverem estilhaçadas, o array vem vazio e o
-		// Random.Next(0) rebenta.
-		if (source.Length == 0)
-		{
-			return;
-		}
+    private void OnTick(object sender, EventArgs e)
+    {
+        if (Spawn)
+        {
+            if (!MenuConrtoller.ObjectPool.AreAnyVisible)
+            {
+                if (ZombieCreator.IsNightFall() && !_nightFall)
+                {
+                    UiExtended.DisplayHelpTextThisFrame(Lang.T("help.nightfall_warning"));
+                    _nightFall = true;
+                }
+                else if (!ZombieCreator.IsNightFall())
+                {
+                    _nightFall = false;
+                }
+            }
+            SpawnVehicles();
+            SpawnPeds();
+        }
+        else
+        {
+            ClearAll();
+        }
+    }
 
-		VehicleWindowIndex val = source[Database.Random.Next(source.Length)];
-		veh.Windows[val].Smash();
-	}
+    private void SpawnPeds()
+    {
+        _peds = _peds.Where(Exists).ToList();
+        int cap = _maxZombies;
+        if (_procedural)
+        {
+            // A população máxima acompanha a densidade que a semente dá a este sítio.
+            cap = Math.Max(2, (int)Math.Round(_maxZombies * WorldSeed.Density(PlayerPosition)));
+            UpdateHordes();
+            TriggerHordes();
+        }
+        if (_peds.Count >= cap)
+        {
+            return;
+        }
+        int need = Math.Min(cap - _peds.Count, MaxPedSpawnsPerTick);
+        for (int i = 0; i < need; i++)
+        {
+            Vector3 position = PlayerPed.Position;
+            Vector3 spawnPoint = position.Around(_spawnDistance);
+            spawnPoint = World.GetNextPositionOnStreet(spawnPoint);
+            if (!IsValidSpawn(spawnPoint))
+            {
+                break;
+            }
+            // Aceita o ponto com probabilidade proporcional à densidade local: zonas mortas ficam vazias.
+            if (_procedural && Database.Random.NextDouble() > WorldSeed.Density(spawnPoint) / WorldNoise.MaxDensity)
+            {
+                continue;
+            }
+            Vector3 around = spawnPoint.Around(5f);
+            if (around.IsOnScreen() || around.VDist(PlayerPosition) < _minSpawnDistance)
+            {
+                break;
+            }
+            Ped randomPed = World.CreateRandomPed(around);
+            // Exists(): CreateRandomPed pode devolver um ped com handle 0 que != null deixa passar.
+            if (randomPed != null && randomPed.Exists())
+            {
+                _peds.Add(ZombieCreator.InfectPed(randomPed, _zombieHealth));
+            }
+        }
+    }
 
-	public bool IsInvalidZone(Vector3 spawn)
-	{
-		return Array.Find(InvalidZoneNames, (string z) =>
-		{
-			return z == World.GetZoneLocalizedName(spawn);
-		}) != null;
-	}
+    /// <summary>
+    /// Hordas da semente: nas células vizinhas que a semente marca com uma (e que o jogador
+    /// ainda não limpou), a horda aparece quando o jogador chega a menos de HordeTriggerDistance.
+    /// </summary>
+    private void TriggerHordes()
+    {
+        Vector3 player = PlayerPosition;
+        int cx = WorldNoise.Cell(player.X);
+        int cy = WorldNoise.Cell(player.Y);
+        for (int x = cx - 1; x <= cx + 1; x++)
+        {
+            for (int y = cy - 1; y <= cy + 1; y++)
+            {
+                if (_hordes.Any(h => h.CellX == x && h.CellY == y)
+                    || WorldSeed.IsCleared("h", x, y)
+                    || !WorldSeed.TryGetHorde(x, y, out int size))
+                {
+                    continue;
+                }
+                float cellSize = WorldNoise.CellSize;
+                Vector3 center = World.GetNextPositionOnStreet(new Vector3((x + 0.5f) * cellSize, (y + 0.5f) * cellSize, player.Z));
+                float distance = center.VDist(player);
+                if (distance > HordeTriggerDistance || distance < _minSpawnDistance || center.IsOnScreen()
+                    || IsInvalidZone(center) || !IsValidSpawn(center))
+                {
+                    continue;
+                }
+                _hordes.Add(new Horde { CellX = x, CellY = y, ToSpawn = size, Center = center });
+                ModLogger.Info("WorldSeed", "horda de " + size + " na célula " + x + "," + y + ".");
+            }
+        }
+    }
 
-	private static bool Exists(Entity arg)
-	{
-		return arg != (Entity)null && arg.Exists();
-	}
+    /// <summary>
+    /// Faz nascer as hordas aos poucos e vigia-as. A célula só fica "limpa" (gravada no World.json)
+    /// se o jogador matou a maioria; zumbis que se perderam ao longe não contam, e a horda volta.
+    /// </summary>
+    private void UpdateHordes()
+    {
+        for (int h = _hordes.Count - 1; h >= 0; h--)
+        {
+            Horde horde = _hordes[h];
+            int batch = Math.Min(horde.ToSpawn, MaxHordeSpawnsPerTick);
+            for (int i = 0; i < batch; i++)
+            {
+                horde.ToSpawn--;
+                Ped ped = World.CreateRandomPed(horde.Center.Around(8f));
+                if (ped == null || !ped.Exists())
+                {
+                    continue;
+                }
+                Ped zombie = ZombieCreator.InfectPed(ped, _zombieHealth);
+                horde.Peds.Add(zombie);
+                horde.Spawned++;
+                _peds.Add(zombie);
+            }
+            horde.Peds.RemoveAll(p =>
+            {
+                if (!Exists(p))
+                {
+                    return true;
+                }
+                if (p.IsDead)
+                {
+                    horde.Killed.Add(p.Handle);
+                }
+                return false;
+            });
+            if (horde.ToSpawn > 0 || horde.Peds.Count > 0)
+            {
+                continue;
+            }
+            if (horde.Spawned > 0 && horde.Killed.Count >= (int)Math.Ceiling(horde.Spawned * HordeClearedRatio))
+            {
+                WorldSeed.MarkCleared("h", horde.CellX, horde.CellY);
+                ModLogger.Info("WorldSeed", "horda da célula " + horde.CellX + "," + horde.CellY + " limpa.");
+            }
+            _hordes.RemoveAt(h);
+        }
+    }
 
-	private void ClearAll()
-	{
-		while (_peds.Count > 0)
-		{
-			Ped val = _peds[0];
-			((Entity)val).Delete();
-			_peds.RemoveAt(0);
-		}
-		while (_vehicles.Count > 0)
-		{
-			Vehicle val2 = _vehicles[0];
-			((Entity)val2).Delete();
-			_vehicles.RemoveAt(0);
-		}
-	}
+    private void SpawnVehicles()
+    {
+        _vehicles = _vehicles.Where(Exists).ToList();
+        if (_vehicles.Count >= _maxVehicles)
+        {
+            return;
+        }
+        int need = Math.Min(_maxVehicles - _vehicles.Count, MaxVehicleSpawnsPerTick);
+        for (int i = 0; i < need; i++)
+        {
+            Vector3 position = PlayerPed.Position;
+            Vector3 spawnPoint = position.Around(_spawnDistance);
+            spawnPoint = World.GetNextPositionOnStreet(spawnPoint);
+            if (IsInvalidZone(spawnPoint) || !IsValidSpawn(spawnPoint))
+            {
+                break;
+            }
+            Vector3 vehiclePosition = spawnPoint.Around(2.5f);
+            if (
+                vehiclePosition.IsOnScreen()
+                || vehiclePosition.VDist(PlayerPosition) < _minSpawnDistance
+            )
+            {
+                break;
+            }
+            Model randomVehicleModel = Database.GetRandomVehicleModel();
 
-	public bool IsValidSpawn(Vector3 spawnPoint)
-	{
-		int num = SpawnBlocker.FindIndex((Vector3 spawn) =>
-		{
-			return spawn.VDist(spawnPoint) < 150f;
-		});
-		return num <= -1;
-	}
+            // EXEMPLO — SafeExecutor.Run<T> à volta de um spawn.
+            // World.CreateVehicle é um native: pode falhar (modelo ainda não carregado,
+            // posicao invalida) e a ScriptDomain abortaria o script inteiro. Com Run<T>
+            // fica registado e devolve null, pelo que o null-check de baixo continua a
+            // valer exactamente como estava.
+            Vehicle randomVehicle = SafeExecutor.Run(
+                "ZombieVehicleSpawner.SpawnVehicle",
+                () => World.CreateVehicle(randomVehicleModel, vehiclePosition),
+                defaultValue: null
+            );
+
+            if (randomVehicle != null)
+            {
+                // EXEMPLO — SafeExecutor.Run (void) à volta de um bloco de natives.
+                // Apanha só o estrago cosmético: se um native falhar a meio, o veiculo
+                // fica pela metade mas o _vehicles.Add() de baixo continua a correr.
+                SafeExecutor.Run(
+                    "ZombieVehicleSpawner.DamageVehicle",
+                    () =>
+                    {
+                        randomVehicle.EngineHealth = 0f;
+                        randomVehicle.MarkAsNoLongerNeeded();
+                        randomVehicle.DirtLevel = 14f;
+                        SmashRandomWindow(randomVehicle);
+                        if (Database.Random.NextDouble() < 0.5)
+                        {
+                            SmashRandomWindow(randomVehicle);
+                        }
+                        if (Database.Random.NextDouble() < 0.20000000298023224)
+                        {
+                            OpenRandomDoor(randomVehicle);
+                        }
+                        randomVehicle.Heading = Database.Random.Next(1, 360);
+                    }
+                );
+
+                // Isto fica fora do SafeExecutor de proposito: e registo interno, nao um
+                // native, e se nao correr o mod perde o controlo do veiculo para sempre.
+                _vehicles.Add(randomVehicle);
+            }
+        }
+    }
+
+    private static void OpenRandomDoor(Vehicle veh)
+    {
+        VehicleDoor[] doors = veh.Doors.ToArray();
+
+        var availableDoors = doors.Where(door => !door.IsOpen).ToArray();
+        // Motos e alguns veículos não têm portas: Random.Next(0) lança
+        // ArgumentOutOfRangeException e rebentava o spawner todo.
+        if (availableDoors.Length == 0)
+        {
+            return;
+        }
+
+        VehicleDoor randomDoor = availableDoors[Database.Random.Next(availableDoors.Length)];
+        randomDoor.Open(false, true);
+    }
+
+    private static void SmashRandomWindow(Vehicle vehicle)
+    {
+        // Criar uma lista para armazenar as janelas intactas
+        List<VehicleWindow> intactWindows = new List<VehicleWindow>();
+
+        // Iterar pelas janelas e verificar se estão intactas
+        foreach (VehicleWindowIndex windowIndex in Enum.GetValues(typeof(VehicleWindowIndex)))
+        {
+            var window = vehicle.Windows[windowIndex];
+
+            if (window.IsIntact) // Verifica se a janela está intacta
+            {
+                intactWindows.Add(window);
+            }
+        }
+
+        // Se houver janelas intactas
+        if (intactWindows.Count > 0)
+        {
+            // Seleciona uma janela intacta aleatória
+            var randomWindow = intactWindows[Database.Random.Next(intactWindows.Count)];
+
+            // Quebra a janela
+            randomWindow.Smash();
+        }
+    }
+
+    public bool IsInvalidZone(Vector3 spawn)
+    {
+        return InvalidZoneNames.Contains(World.GetZoneLocalizedName(spawn));
+    }
+
+    private static bool Exists(Entity arg)
+    {
+        return arg != null && arg.Exists();
+    }
+
+    private void ClearAll()
+    {
+        while (_peds.Count > 0)
+        {
+            Ped ped = _peds[0];
+            ped.Delete();
+            _peds.RemoveAt(0);
+        }
+        // while (_vehicles.Count > 0)
+        // {
+        //     Vehicle vehicle = _vehicles[0];
+        //     vehicle.Delete();
+        //     _vehicles.RemoveAt(0);
+        // }
+        foreach (var vehicle in _vehicles)
+        {
+            vehicle?.Delete();
+        }
+        _vehicles.Clear();
+        _hordes.Clear();
+    }
+
+    public bool IsValidSpawn(Vector3 spawnPoint)
+    {
+        return SpawnBlocker.FindIndex(spawn => spawn.VDist(spawnPoint) < 150.0) <= -1;
+    }
 }

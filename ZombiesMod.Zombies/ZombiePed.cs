@@ -22,6 +22,15 @@ public abstract class ZombiePed : IEquatable<Ped>
 
 	public static float SilencerEffectiveRange = 15f;
 
+	/// <summary>Alcance de um tiro sem silenciador. Acima disto o zumbi nao ouve.</summary>
+	public static float GunshotHearingRange = 100f;
+
+	/// <summary>Tempo (ms) sem ver nem ouvir o alvo ate o zumbi desistir dele.</summary>
+	public static int LoseTargetAfterMs = 8000;
+
+	/// <summary>Intervalo (ms) entre varreduras de alvo; no resto dos frames so move e ataca.</summary>
+	private const int SenseIntervalMs = 400;
+
 	public static float BehindZombieNoticeDistance = 5f;
 
 	public static float RunningNoticeDistance = 25f;
@@ -44,6 +53,10 @@ public abstract class ZombiePed : IEquatable<Ped>
 
 	private DateTime _currentMovementUpdateTime;
 
+	private int _nextSenseTime;
+
+	private int _lastDetectedTime;
+
 	public virtual bool PlayAudio { get; set; }
 
 	public Ped Target
@@ -60,7 +73,14 @@ public abstract class ZombiePed : IEquatable<Ped>
 				bool goingToTarget = (AttackingTarget = false);
 				GoingToTarget = goingToTarget;
 			}
+			bool switched = value != null && _target != null && !_target.Equals(value);
 			_target = value;
+			// GoToTarget so dispara na transicao "nao vai" -> "vai"; sem isto o zumbi
+			// seguia a perseguir o alvo antigo depois da troca.
+			if (switched && _goingToTarget)
+			{
+				GoToTarget?.Invoke(value);
+			}
 		}
 	}
 
@@ -148,9 +168,10 @@ public abstract class ZombiePed : IEquatable<Ped>
 	{
 		// Limpeza primeiro, e independentemente de estar morto: é ela que liberta o
 		// wrapper, porque a entidade deixa de existir e o wrapper desfaz-se sozinho.
-		if (_ped.Position.VDist(Database.PlayerPosition) > 120f && (!_ped.IsOnScreen || _ped.IsDead))
+		if (_ped.Position.VDist(Database.PlayerPosition) > SensingRange && (!_ped.IsOnScreen || _ped.IsDead))
 		{
 			_ped.Delete();
+			return;
 		}
 		if (_ped.IsDead)
 		{
@@ -165,7 +186,12 @@ public abstract class ZombiePed : IEquatable<Ped>
 			_ped.PlayPain(8);
 			_ped.PlayFacialAnim("facials@gen_male@base", "burning_1");
 		}
-		GetTarget();
+		if (Game.GameTime >= _nextSenseTime)
+		{
+			// Jitter: os zumbis nao varrem todos no mesmo frame.
+			_nextSenseTime = Game.GameTime + SenseIntervalMs + Database.Random.Next(0, 150);
+			GetTarget();
+		}
 		SetWalkStyle();
 		if (((Entity)_ped).IsOnFire && !((Entity)_ped).IsDead)
 		{
@@ -233,43 +259,65 @@ public abstract class ZombiePed : IEquatable<Ped>
 	{
 		Ped[] array = World.GetNearbyPeds(_ped, SensingRange).Where(IsGoodTarget).ToArray();
 		Ped closest = World.GetClosest<Ped>(_ped.Position, array);
-		if ((Entity)(object)closest != (Entity)null && (((Entity)(object)_ped).HasClearLineOfSight((Entity)(object)closest, VisionDistance) || CanHearPed(closest)))
+
+		bool targetValid = Target != null && Target.Exists() && !Target.IsDead && IsGoodTarget(Target);
+		if (targetValid && Detects(Target))
 		{
-			Target = closest;
+			_lastDetectedTime = Game.GameTime;
+			// Fica no alvo atual (sem alternar a cada ped odiado mais perto), a menos que
+			// outro esteja a menos de metade da distancia e seja percebido.
+			if (closest != null && !closest.Equals(Target)
+				&& _ped.Position.VDist(closest.Position) < _ped.Position.VDist(Target.Position) * 0.5f
+				&& Detects(closest))
+			{
+				Target = closest;
+			}
+			return;
 		}
-		else if ((Entity)(object)Target != (Entity)null && (!IsGoodTarget(Target) || ((Entity)Target).IsDead))
+
+		if (closest != null && Detects(closest))
 		{
-			// Só se larga o alvo quando ele mesmo deixou de servir. A condição anterior
-			// tinha um «|| closest != Target» que largava um alvo válido todas as vezes
-			// que outro ped odiado ficava mais perto ou se perdia a linha de visão — o
-			// zombie andava a re-alvo sem parar.
+			_lastDetectedTime = Game.GameTime;
+			Target = closest;
+			return;
+		}
+
+		// Perdeu-o: larga se deixou de servir, fugiu alem do alcance ou ficou tempo demais
+		// sem ser visto nem ouvido.
+		if (Target != null
+			&& (!targetValid
+				|| _ped.Position.VDist(Target.Position) > SensingRange
+				|| Game.GameTime - _lastDetectedTime > LoseTargetAfterMs))
+		{
 			Target = null;
 		}
 	}
 
+	private bool Detects(Ped ped)
+	{
+		return _ped.HasClearLineOfSight(ped, VisionDistance) || CanHearPed(ped);
+	}
+
+	/// <summary>
+	/// Audicao por alcance: perto (nas costas), correndo, tiro com silenciador (curto) e tiro
+	/// sem silenciador (longo). Parado e calado, so se ve, nao se ouve.
+	/// </summary>
 	private bool CanHearPed(Ped ped)
 	{
-		float distance = ((Entity)ped).Position.VDist(_ped.Position);
-		return !IsWeaponWellSilenced(ped, distance) || IsBehindZombie(distance) || IsRunningNoticed(ped, distance);
-	}
-
-	private static bool IsRunningNoticed(Ped ped, float distance)
-	{
-		return ped.IsSprinting && distance < RunningNoticeDistance;
-	}
-
-	private static bool IsBehindZombie(float distance)
-	{
-		return distance < BehindZombieNoticeDistance;
-	}
-
-	private static bool IsWeaponWellSilenced(Ped ped, float distance)
-	{
-		if (!ped.IsShooting)
+		float distance = ped.Position.VDist(_ped.Position);
+		if (distance < BehindZombieNoticeDistance)
 		{
 			return true;
 		}
-		return ped.IsCurrentWeaponSileced() && distance > SilencerEffectiveRange;
+		if (ped.IsSprinting && distance < RunningNoticeDistance)
+		{
+			return true;
+		}
+		if (ped.IsShooting)
+		{
+			return distance < (ped.IsCurrentWeaponSileced() ? SilencerEffectiveRange : GunshotHearingRange);
+		}
+		return false;
 	}
 
 	private bool IsGoodTarget(Ped ped)

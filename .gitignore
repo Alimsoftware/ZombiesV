@@ -1,0 +1,7 @@
+bin/
+obj/
+graphify-out/
+*.bak
+*.bak-*
+*.user
+.vs/

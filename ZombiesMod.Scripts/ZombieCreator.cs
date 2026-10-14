@@ -44,10 +44,6 @@ public static class ZombieCreator
 		((Entity)ped).IsPersistent = true;
 		ped.RelationshipGroup = Relationships.InfectedRelationship;
 		float num = 0.055f;
-		if (IsNightFall())
-		{
-			num = 0.5f;
-		}
 		TimeSpan currentDayTime = World.CurrentTimeOfDay;
 		if (currentDayTime.Hours >= 20 || currentDayTime.Hours <= 3)
 		{

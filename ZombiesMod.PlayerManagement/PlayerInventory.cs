@@ -39,6 +39,8 @@ public class PlayerInventory : SafeScript
 
 	private readonly Keys _inventoryKey = Keys.I;
 
+	public Inventory Backpack => _inventory;
+
 	public static PlayerInventory Instance { get; private set; }
 
 	private static Ped PlayerPed => Database.PlayerPed;
@@ -64,21 +66,10 @@ public class PlayerInventory : SafeScript
 		_inventoryKey = ((Script)this).Settings.GetValue<Keys>("keys", "inventory_key", _inventoryKey);
 		((Script)this).Settings.SetValue<Keys>("keys", "inventory_key", _inventoryKey);
 		((Script)this).Settings.Save();
-		Inventory inventory = Serializer.Deserialize<Inventory>("./scripts/Inventory.dat");
-		if (inventory == null)
-		{
-			inventory = new Inventory(MenuType.Player);
-		}
-		else
-		{
-			// Save anterior a esta versão: acrescenta os itens embutidos que ainda não
-			// existiam quando o inventário foi gravado, sem apagar o progresso do jogador.
-			inventory.EnsureDefaultCatalog();
-		}
-		_inventory = inventory;
-		// Itens do jogador (ZombiesMod_CustomItems.json) antes dos menus: assim entram
-		// logo no inventário, mesmo que o save seja anterior ao ficheiro.
+		_inventory = new Inventory(MenuType.Player);
+		// Itens do jogador (ZombiesMod_CustomItems.json) antes das quantidades e dos menus.
 		CustomItems.Apply(_inventory);
+		SaveData.Apply(_inventory, Serializer.Deserialize<InventorySave>(Config.InventoryFilePath));
 		_inventory.LoadMenus();
 		Instance = this;
 		MenuConrtoller.ObjectPool.Add(_mainMenu);
@@ -136,7 +127,7 @@ public class PlayerInventory : SafeScript
 				{
 					UI.Notification.Show(Lang.T("notify.dev_mode_enabled"), false);
 				}
-				Serializer.Serialize("./scripts/Inventory.dat", _inventory);
+				Serializer.Serialize(Config.InventoryFilePath, SaveData.From(_inventory));
 			}
 		};
 
@@ -145,7 +136,7 @@ public class PlayerInventory : SafeScript
 		_inventory.ItemUsed += InventoryOnItemUsed;
 		_inventory.AddedItem += (InventoryItemBase item, int amount) =>
 		{
-			Serializer.Serialize("./scripts/Inventory.dat", _inventory);
+			Serializer.Serialize(Config.InventoryFilePath, SaveData.From(_inventory));
 		};
 		WrapEvents();
 		LootedPed += OnLootedPed;
@@ -245,34 +236,8 @@ public class PlayerInventory : SafeScript
 				UI.Notification.Show(Lang.T("notify.build_in_vehicle"), false);
 				return;
 			}
-			BuildableInventoryItem buildableInventoryItem = (BuildableInventoryItem)item;
-			ItemPreview itemPreview = new ItemPreview();
-			itemPreview.StartPreview(buildableInventoryItem.PropName, buildableInventoryItem.GroundOffset, buildableInventoryItem.IsDoor, buildableInventoryItem.IsSnappable);
-			try
-			{
-				while (!itemPreview.PreviewComplete)
-				{
-					Script.Yield();
-				}
-			}
-			catch (ThreadAbortException)
-			{
-				// Thread was aborted (likely script unload or menu close) — don't crash the script
-				ModLogger.Error("InventoryOnItemUsed", "Thread aborted while waiting for buildable preview");
-				return;
-			}
-			catch (Exception ex)
-			{
-				ModLogger.Error("InventoryOnItemUsed", ex.ToString());
-				return;
-			}
-			Prop result = itemPreview.GetResult();
-			if ((Entity)(object)result == (Entity)null)
-			{
-				return;
-			}
-			AddBlipToProp(buildableInventoryItem, buildableInventoryItem.Id, (Entity)(object)result);
-			BuildableUsed?.Invoke(buildableInventoryItem, result);
+			PlaceBuildable((BuildableInventoryItem)item, type);
+			return;
 		}
 		else if (item.GetType() == typeof(UsableInventoryItem))
 		{
@@ -309,6 +274,61 @@ public class PlayerInventory : SafeScript
 			}
 		}
 		_inventory.AddItem(item, -1, type);
+	}
+
+	/// <summary>No modo edicao os construiveis sao ilimitados e gratis.</summary>
+	public static bool IsFreeBuild(InventoryItemBase item)
+	{
+		return item is BuildableInventoryItem && PlayerMap.Instance != null && PlayerMap.Instance.EditMode;
+	}
+
+	/// <summary>
+	/// Coloca o construivel e, enquanto houver estoque (ou for gratis), abre o proximo preview
+	/// em sequencia. Cancelar (voltar) encerra. Bloqueia o script: so chamar da thread do script.
+	/// </summary>
+	private void PlaceBuildable(BuildableInventoryItem item, ItemType type)
+	{
+		while (true)
+		{
+			ItemPreview preview = new ItemPreview();
+			preview.StartPreview(item.PropName, item.GroundOffset, item.IsDoor, item.IsSnappable);
+			try
+			{
+				while (!preview.PreviewComplete)
+				{
+					Script.Yield();
+				}
+			}
+			catch (ThreadAbortException)
+			{
+				// Script descarregado ou menu fechado: nao derruba o script.
+				ModLogger.Error("PlaceBuildable", "Thread aborted while waiting for buildable preview");
+				return;
+			}
+			catch (Exception ex)
+			{
+				ModLogger.Error("PlaceBuildable", ex.ToString());
+				return;
+			}
+
+			Prop result = preview.GetResult();
+			if (result == null)
+			{
+				return;
+			}
+			AddBlipToProp(item, item.Id, result);
+			BuildableUsed?.Invoke(item, result);
+			if (item.Amount > 0)
+			{
+				_inventory.AddItem(item, -1, type);
+			}
+			if ((item.Amount <= 0 && !IsFreeBuild(item)) || PlayerPed.IsInVehicle() || Database.PlayerIsDead)
+			{
+				return;
+			}
+			// Um frame de folga: o clique que colocou nao pode colocar o proximo.
+			Script.Yield();
+		}
 	}
 
 	private void OnTick(object sender, EventArgs eventArgs)

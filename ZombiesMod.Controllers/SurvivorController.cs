@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using GTA;
+using GTA.Math;
+using ZombiesMod.Extensions;
 using ZombiesMod.DataClasses;
 using ZombiesMod.Static;
 using ZombiesMod.SurvivorTypes;
@@ -21,6 +24,20 @@ public class SurvivorController : SafeScript, ISpawner
 
 	private DateTime _currentDelayTime;
 
+	private const float EncounterTriggerDistance = 220f;
+
+	private const float EncounterMinDistance = 80f;
+
+	private readonly bool _procedural = true;
+
+	private DateTime _nextScan;
+
+	/// <summary>Célula (x, y) de cada encontro procedural ativo.</summary>
+	private readonly Dictionary<Survivors, int[]> _cells = new Dictionary<Survivors, int[]>();
+
+	/// <summary>Células cujo encontro não conseguiu nascer nesta sessão (evita tentar a cada segundo).</summary>
+	private readonly HashSet<long> _failed = new HashSet<long>();
+
 	public bool Spawn { get; set; }
 
 	public static SurvivorController Instance { get; private set; }
@@ -30,6 +47,7 @@ public class SurvivorController : SafeScript, ISpawner
 	public SurvivorController()
 	{
 		Instance = this;
+		_procedural = ((Script)this).Settings.GetValue<bool>("spawning", "procedural_spawning", true);
 		_survivorInterval = ((Script)this).Settings.GetValue<int>("survivors", "survivor_interval", _survivorInterval);
 		_survivorSpawnChance = ((Script)this).Settings.GetValue<float>("survivors", "survivor_spawn_chance", _survivorSpawnChance);
 		_merryweatherTimeout = ((Script)this).Settings.GetValue<int>("survivors", "merryweather_timeout", _merryweatherTimeout);
@@ -101,24 +119,113 @@ public class SurvivorController : SafeScript, ISpawner
 
 	private void OnTick(object sender, EventArgs eventArgs)
 	{
-		Create();
+		if (_procedural && Spawn)
+		{
+			ProcessEncounters();
+		}
+		else
+		{
+			Create();
+		}
 		Destroy();
-		_survivors.ForEach((Survivors s) =>
+		// Cópia: Update() pode completar o evento e o handler mexe na lista.
+		foreach (Survivors s in _survivors.ToArray())
 		{
 			s.Update();
-		});
+		}
 	}
 
 	private void Destroy()
 	{
 		if (!Spawn)
 		{
-			_survivors.ForEach((Survivors s) =>
+			foreach (Survivors s in _survivors.ToArray())
 			{
 				_survivors.Remove(s);
+				_cells.Remove(s);
 				s.Abort();
-			});
+			}
 			_currentDelayTime = DateTime.UtcNow;
+		}
+	}
+
+	/// <summary>
+	/// Encontros da semente: acampamentos, hostis e patrulhas nas células que a semente marca.
+	/// Nascem quando o jogador se aproxima; ficam resolvidos (gravados no World.json) quando o
+	/// evento termina, e não voltam.
+	/// </summary>
+	private void ProcessEncounters()
+	{
+		DateTime now = DateTime.UtcNow;
+		if (now < _nextScan)
+		{
+			return;
+		}
+		_nextScan = now.AddSeconds(1);
+		Vector3 player = Database.PlayerPosition;
+		int cx = WorldNoise.Cell(player.X);
+		int cy = WorldNoise.Cell(player.Y);
+		float cellSize = WorldNoise.CellSize;
+		for (int x = cx - 1; x <= cx + 1; x++)
+		{
+			for (int y = cy - 1; y <= cy + 1; y++)
+			{
+				CellContent content = WorldSeed.Content(x, y);
+				Type type = content == CellContent.Friendly ? typeof(FriendlySurvivors)
+					: content == CellContent.Hostile ? typeof(HostileSurvivors)
+					: content == CellContent.Merryweather ? typeof(MerryweatherSurvivors)
+					: null;
+				long key = ((long)x << 32) ^ (uint)y;
+				if (type == null || _failed.Contains(key) || WorldSeed.IsCleared("e", x, y)
+					|| _cells.Values.Any((int[] c) => c[0] == x && c[1] == y)
+					|| _survivors.Any((Survivors s) => s.GetType() == type))
+				{
+					continue;
+				}
+				float dx = (x + 0.5f) * cellSize - player.X;
+				float dy = (y + 0.5f) * cellSize - player.Y;
+				if (dx * dx + dy * dy > EncounterTriggerDistance * EncounterTriggerDistance)
+				{
+					continue;
+				}
+				Vector3 center = World.GetNextPositionOnStreet(new Vector3((x + 0.5f) * cellSize, (y + 0.5f) * cellSize, player.Z));
+				float distance = center.VDist(player);
+				if (distance > EncounterTriggerDistance || distance < EncounterMinDistance || center.IsOnScreen())
+				{
+					continue;
+				}
+				Survivors survivors = content == CellContent.Friendly ? new FriendlySurvivors()
+					: content == CellContent.Hostile ? (Survivors)new HostileSurvivors()
+					: new MerryweatherSurvivors(_merryweatherTimeout);
+				survivors.Origin = center;
+				bool spawning = true;
+				bool failed = false;
+				int cellX = x;
+				int cellY = y;
+				survivors.Completed += (Survivors done) =>
+				{
+					if (spawning)
+					{
+						// Terminou ainda a nascer: ponto inválido, nada foi resolvido.
+						failed = true;
+						return;
+					}
+					done.CleanUp();
+					_survivors.Remove(done);
+					_cells.Remove(done);
+					WorldSeed.MarkCleared("e", cellX, cellY);
+				};
+				survivors.SpawnEntities();
+				spawning = false;
+				if (failed)
+				{
+					survivors.Abort();
+					_failed.Add(key);
+					continue;
+				}
+				_survivors.Add(survivors);
+				_cells[survivors] = new int[2] { x, y };
+			}
 		}
 	}
 

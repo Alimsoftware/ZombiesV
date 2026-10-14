@@ -8,31 +8,28 @@ public class Config
 {
 	public static string VersionId = "1.0.2d";
 
-	public const string ScriptFilePath = "./scripts/";
+	// Tudo o que o mod cria vive aqui; fora da pasta só ficam a DLL e o .ini.
+	public const string ModFolder = "./scripts/ZombiesMod/";
+
+	public const string ScriptFilePath = ModFolder + "items/";
 
 	public const string IniFilePath = "./scripts/ZombiesMod.ini";
 
-	public const string InventoryFilePath = "./scripts/Inventory.dat";
+	public const string InventoryFilePath = ModFolder + "saves/Inventory.json";
 
-	public const string MapFilePath = "./scripts/Map.dat";
+	public const string MapFilePath = ModFolder + "saves/Map.json";
 
-	public const string VehicleFilePath = "./scripts/Vehicles.dat";
+	public const string WorldFilePath = ModFolder + "saves/World.json";
 
-	public const string GuardsFilePath = "./scripts/Guards.dat";
+	public const string VehicleFilePath = ModFolder + "saves/Vehicles.json";
+
+	public const string GuardsFilePath = ModFolder + "saves/Guards.json";
 
 	public static void Check()
 	{
 		ScriptSettings val = ScriptSettings.Load("./scripts/ZombiesMod.ini");
 		if (!(val.GetValue("mod", "version_id", "0") == VersionId))
 		{
-			if (File.Exists("./scripts/ZombiesMod.ini"))
-			{
-				File.Delete("./scripts/ZombiesMod.ini");
-			}
-			if (File.Exists("./scripts/Inventory.dat"))
-			{
-				File.Delete("./scripts/Inventory.dat");
-			}
 			UI.Notification.Show(Lang.T("notify.updating_version", VersionId), false);
 			val.SetValue("mod", "version_id", VersionId);
 			val.Save();

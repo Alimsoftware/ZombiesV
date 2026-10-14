@@ -26,6 +26,8 @@ public class PlayerGroupManager : SafeScript
 
 	private readonly Dictionary<Ped, PedTask> _pedTasks = new Dictionary<Ped, PedTask>();
 
+	private bool _saving;
+
 	public Ped PlayerPed => Database.PlayerPed;
 
 	public Vector3 PlayerPosition
@@ -144,6 +146,7 @@ public class PlayerGroupManager : SafeScript
 		case PedTask.Leave:
 		{
 			ped.LeaveGroup();
+			_pedTasks.Remove(ped);
 			Blip currentBlip = ((Entity)ped).AttachedBlip;
 			if (currentBlip != null)
 			{
@@ -215,15 +218,14 @@ public class PlayerGroupManager : SafeScript
 		{
 			return;
 		}
-		PedCollection pedCollection = Serializer.Deserialize<PedCollection>("./scripts/Guards.dat");
-		if (pedCollection == null)
-		{
-			pedCollection = new PedCollection();
-		}
+		PedCollection pedCollection = SaveData.ToPeds(Serializer.Deserialize<List<PedSave>>(Config.GuardsFilePath));
 		_peds = pedCollection;
 		_peds.ListChanged += (PedCollection count) =>
 		{
-			Serializer.Serialize("./scripts/Guards.dat", _peds);
+			if (!_saving)
+			{
+				Serializer.Serialize(Config.GuardsFilePath, SaveData.From(_peds));
+			}
 		};
 		_peds.ToList().ForEach((PedData data) =>
 		{
@@ -260,14 +262,22 @@ public class PlayerGroupManager : SafeScript
 			PedData data = pedDatas.Find((PedData pedData) => pedData.Handle == ((Entity)ped).Handle);
 			return UpdatePedData(ped, data);
 		}).ToList();
-		list2.ForEach((PedData data) =>
+		_saving = true;
+		try
 		{
-			if (!_peds.Contains(data))
+			list2.ForEach((PedData data) =>
 			{
-				_peds.Add(data);
-			}
-		});
-		Serializer.Serialize("./scripts/Guards.dat", _peds);
+				if (!_peds.Contains(data))
+				{
+					_peds.Add(data);
+				}
+			});
+		}
+		finally
+		{
+			_saving = false;
+		}
+		Serializer.Serialize(Config.GuardsFilePath, SaveData.From(_peds));
 		UI.Notification.Show(Lang.T("notify.guards_saved"), false);
 	}
 

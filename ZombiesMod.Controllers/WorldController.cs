@@ -12,6 +12,47 @@ public class WorldController : SafeScript
 {
 	private bool _reset;
 
+	private static readonly string[] ScriptsToTerminate =
+	{
+		"re_prison",
+		"am_prison",
+		"gb_biker_free_prisoner",
+		"re_prisonvanbreak",
+		"am_vehicle_spawn",
+		"am_taxi",
+		"audiotest",
+		"freemode",
+		"re_prisonerlift",
+		"re_lossantosintl",
+		"re_armybase",
+		"restrictedareas",
+		"stripclub",
+		"re_gangfight",
+		"re_gang_intimidation",
+		"spawn_activities",
+		"am_vehiclespawn",
+		"traffick_air",
+		"traffick_ground",
+		"emergencycall",
+		"emergencycalllauncher",
+		"clothes_shop_sp",
+		"gb_rob_shop",
+		"gunclub_shop",
+		"hairdo_shop_sp",
+		"re_shoprobbery",
+		"shop_controller",
+		"re_crashrescue",
+		"re_rescuehostage",
+		"fm_mission_controller",
+		"player_scene_m_shopping",
+		"shoprobberies",
+		"re_atmrobbery",
+		"ob_vend1",
+		"ob_vend2"
+	};
+
+	private int _tick;
+
 	public static bool Configure { get; set; }
 
 	public static bool StopPedsFromSpawning { get; set; }
@@ -91,42 +132,13 @@ public class WorldController : SafeScript
 					0f
 				});
 			});
-			ScriptExtended.TerminateScriptByName("re_prison");
-			ScriptExtended.TerminateScriptByName("am_prison");
-			ScriptExtended.TerminateScriptByName("gb_biker_free_prisoner");
-			ScriptExtended.TerminateScriptByName("re_prisonvanbreak");
-			ScriptExtended.TerminateScriptByName("am_vehicle_spawn");
-			ScriptExtended.TerminateScriptByName("am_taxi");
-			ScriptExtended.TerminateScriptByName("audiotest");
-			ScriptExtended.TerminateScriptByName("freemode");
-			ScriptExtended.TerminateScriptByName("re_prisonerlift");
-			ScriptExtended.TerminateScriptByName("am_prison");
-			ScriptExtended.TerminateScriptByName("re_lossantosintl");
-			ScriptExtended.TerminateScriptByName("re_armybase");
-			ScriptExtended.TerminateScriptByName("restrictedareas");
-			ScriptExtended.TerminateScriptByName("stripclub");
-			ScriptExtended.TerminateScriptByName("re_gangfight");
-			ScriptExtended.TerminateScriptByName("re_gang_intimidation");
-			ScriptExtended.TerminateScriptByName("spawn_activities");
-			ScriptExtended.TerminateScriptByName("am_vehiclespawn");
-			ScriptExtended.TerminateScriptByName("traffick_air");
-			ScriptExtended.TerminateScriptByName("traffick_ground");
-			ScriptExtended.TerminateScriptByName("emergencycall");
-			ScriptExtended.TerminateScriptByName("emergencycalllauncher");
-			ScriptExtended.TerminateScriptByName("clothes_shop_sp");
-			ScriptExtended.TerminateScriptByName("gb_rob_shop");
-			ScriptExtended.TerminateScriptByName("gunclub_shop");
-			ScriptExtended.TerminateScriptByName("hairdo_shop_sp");
-			ScriptExtended.TerminateScriptByName("re_shoprobbery");
-			ScriptExtended.TerminateScriptByName("shop_controller");
-			ScriptExtended.TerminateScriptByName("re_crashrescue");
-			ScriptExtended.TerminateScriptByName("re_rescuehostage");
-			ScriptExtended.TerminateScriptByName("fm_mission_controller");
-			ScriptExtended.TerminateScriptByName("player_scene_m_shopping");
-			ScriptExtended.TerminateScriptByName("shoprobberies");
-			ScriptExtended.TerminateScriptByName("re_atmrobbery");
-			ScriptExtended.TerminateScriptByName("ob_vend1");
-			ScriptExtended.TerminateScriptByName("ob_vend2");
+			if (_tick++ % 60 == 0)
+			{
+				foreach (string name in ScriptsToTerminate)
+				{
+					ScriptExtended.TerminateScriptByName(name);
+				}
+			}
 			Function.Call(Hash.STOP_ALARM, new InputArgument[2]
 			{
 				"PRISON_ALARMS",
@@ -155,7 +167,7 @@ public class WorldController : SafeScript
 				0,
 				0
 			});
-			int num2 = Function.Call<int>(Hash.GET_HASH_KEY, new InputArgument[1] { "prop_gate_prison_01" });
+			int num2 = num;
 			Function.Call(Hash.SET_LOCKED_UNSTREAMED_IN_DOOR_OF_TYPE, new InputArgument[7]
 			{
 				num2,

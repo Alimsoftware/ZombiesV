@@ -80,7 +80,7 @@ public class ScriptEventHandler : SafeScript
 		int start = _index;
 		int end = start + 5;
 
-		for (int i = start; i < end && i < _wrapperEventHandlers.Count; i++)
+		for (int i = Math.Min(end, _wrapperEventHandlers.Count) - 1; i >= start; i--)
 		{
 			EventHandler handler = _wrapperEventHandlers[i];
 			if (handler == null)

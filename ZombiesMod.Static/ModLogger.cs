@@ -35,13 +35,13 @@ public static class ModLogger
         string baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
 
         // Rede de segurança: se algum dia a assembly for carregada a partir da pasta
-        // scripts\, não queremos acabar com .\scripts\scripts\ZombiesMod_logs\.
+        // scripts\, não queremos acabar com .\scripts\scripts\ZombiesMod\logs\.
         string folder = Path.GetFileName(
             baseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
 
         _logDirectory = string.Equals(folder, "scripts", StringComparison.OrdinalIgnoreCase)
-            ? Path.Combine(baseDirectory, "ZombiesMod_logs")
-            : Path.Combine(baseDirectory, "scripts", "ZombiesMod_logs");
+            ? Path.Combine(baseDirectory, "ZombiesMod", "logs")
+            : Path.Combine(baseDirectory, "scripts", "ZombiesMod", "logs");
 
         _logPath = Path.Combine(_logDirectory, "errors.log");
     }

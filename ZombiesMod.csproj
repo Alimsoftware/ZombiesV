@@ -26,6 +26,7 @@
       <HintPath>..\dlls\LemonUI.SHVDN3.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Drawing" />
   </ItemGroup>
@@ -35,19 +36,27 @@
       pt.json vai DUAS vezes de propósito:
         1. embutido no DLL  -> se os ficheiros externos faltarem ou corromperem, o jogo
            continua a mostrar português em vez de chaves cruas;
-        2. copiado ao lado  -> é a cópia que a comunidade edita/ traduz, e que vence
+        2. copiado para ZombiesMod\lang -> é a cópia que a comunidade edita/ traduz, e que vence
            sempre sobre a embutida.
       O carregador procura um recurso cujo nome termine em "pt.json", daí o LogicalName fixo.
     -->
     <EmbeddedResource Include="ZombiesMod_lang\pt.json">
       <LogicalName>ZombiesMod_lang.pt.json</LogicalName>
     </EmbeddedResource>
-    <Content Include="ZombiesMod_lang\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="ZombiesMod_lang\*.json" Link="ZombiesMod\lang\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- Copia as refs junto só pra facilitar o deploy na pasta scripts -->
   <Target Name="CopyRefsForDeploy" AfterTargets="Build" Condition="'$(DeployRefs)' == 'true'">
     <Copy SourceFiles="..\dlls\LemonUI.SHVDN3.dll" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!-- Depois de compilar, copia a DLL e o pdb para a pasta scripts do jogo (se existir). -->
+  <PropertyGroup>
+    <GameScriptsDir Condition="'$(GameScriptsDir)' == ''">J:\GTAV\scripts\</GameScriptsDir>
+  </PropertyGroup>
+  <Target Name="DeployToGame" AfterTargets="Build" Condition="Exists('$(GameScriptsDir)')">
+    <Copy SourceFiles="$(TargetDir)ZombiesMod.dll;$(TargetDir)ZombiesMod.pdb" DestinationFolder="$(GameScriptsDir)" ContinueOnError="WarnAndContinue" />
   </Target>
 
 </Project>

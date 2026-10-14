@@ -46,7 +46,7 @@ public class PlayerVehicles : Script
 		VehicleCollection vehicleCollection;
 		try
 		{
-			vehicleCollection = Serializer.Deserialize<VehicleCollection>("./scripts/Vehicles.dat");
+			vehicleCollection = SaveData.ToVehicles(Serializer.Deserialize<List<VehicleSave>>(Config.VehicleFilePath));
 		}
 		catch (Exception ex)
 		{
@@ -126,7 +126,7 @@ public class PlayerVehicles : Script
 		if (_vehicleCollection != null)
 		{
 			UpdateVehicleData();
-			Serializer.Serialize("./scripts/Vehicles.dat", _vehicleCollection);
+			Serializer.Serialize(Config.VehicleFilePath, SaveData.From(_vehicleCollection));
 			if (notify)
 			{
 				UI.Notification.Show((_vehicleCollection.Count <= 0) ? Lang.T("notify.no_vehicles") : Lang.T("notify.vehicles_saved"), false);

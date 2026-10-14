@@ -49,15 +49,11 @@ public class PlayerMap : SafeScript
 	{
 		if (_map == null)
 		{
-			Map map = Serializer.Deserialize<Map>("./scripts/Map.dat");
-			if (map == null)
-			{
-				map = new Map();
-			}
+			Map map = SaveData.ToMap(Serializer.Deserialize<MapSave>(Config.MapFilePath));
 			_map = map;
 			_map.ListChanged += (int count) =>
 			{
-				Serializer.Serialize("./scripts/Map.dat", _map);
+				Serializer.Serialize(Config.MapFilePath, SaveData.From(_map));
 			};
 			LoadProps();
 		}

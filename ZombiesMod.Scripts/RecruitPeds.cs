@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using GTA;
 using GTA.Math;
 using ZombiesMod.Extensions;
@@ -28,31 +29,50 @@ public class RecruitPeds : SafeScript
 		WrapEvents();
 	}
 
+	public const float SearchRadius = 2.5f;
+
+	public const int MaxGroupMembers = 6;
+
 	private static void OnTick(object sender, EventArgs eventArgs)
 	{
-		if (MenuConrtoller.ObjectPool.AreAnyVisible || PlayerPed.PedGroup.MemberCount >= 6)
+		if (MenuConrtoller.ObjectPool.AreAnyVisible || Database.PlayerIsDead || PlayerPed.IsInVehicle()
+			|| PlayerPed.PedGroup.MemberCount >= MaxGroupMembers)
 		{
 			return;
 		}
-		Ped[] nearbyPeds = World.GetNearbyPeds(PlayerPed, 1.5f);
-		Ped closest = World.GetClosest<Ped>(PlayerPosition, nearbyPeds);
-		if ((Entity)(object)closest == (Entity)null || ((Entity)closest).IsDead || closest.IsInCombatAgainst(PlayerPed) || (int)closest.GetRelationshipWithPed(PlayerPed) == 5 || closest.RelationshipGroup != Relationships.FriendlyRelationship || closest.PedGroup == PlayerPed.PedGroup)
+
+		// O mais perto *recrutavel*, e nao o mais perto de todos: um zumbi ou um curioso
+		// encostado no sobrevivente bloqueava o recrutamento sem aviso.
+		Ped closest = World.GetClosest<Ped>(PlayerPosition, World.GetNearbyPeds(PlayerPed, SearchRadius).Where(IsRecruitable).ToArray());
+		if (closest == null)
 		{
 			return;
 		}
+
 		Controls.DisableControlActionThisFrame(ControlType.PlayerControl, (ControlAction)23);
 		UiExtended.DisplayHelpTextThisFrame(Lang.T("help.recruit_ped"));
-		if (Controls.IsDisabledControlJustPressed(ControlType.PlayerControl, (ControlAction)23))
+		if (!Controls.IsDisabledControlJustPressed(ControlType.PlayerControl, (ControlAction)23))
 		{
-			if (FriendlySurvivors.Instance != null)
-			{
-				FriendlySurvivors.Instance.RemovePed(closest);
-			}
-			closest.Recruit(PlayerPed);
-			if (PlayerPed.PedGroup.MemberCount >= 6)
-			{
-				UI.Notification.Show(Lang.T("notify.max_guards_reached"), false);
-			}
+			return;
 		}
+
+		FriendlySurvivors.Instance?.RemovePed(closest);
+		closest.Recruit(PlayerPed);
+		if (PlayerPed.PedGroup.MemberCount >= MaxGroupMembers)
+		{
+			UI.Notification.Show(Lang.T("notify.max_guards_reached"), false);
+		}
+	}
+
+	private static bool IsRecruitable(Ped ped)
+	{
+		return ped != null
+			&& ped.Exists()
+			&& !ped.IsDead
+			&& !ped.IsPlayer
+			&& ped.RelationshipGroup == Relationships.FriendlyRelationship
+			&& !ped.IsInCombatAgainst(PlayerPed)
+			&& (int)ped.GetRelationshipWithPed(PlayerPed) != 5
+			&& !PlayerPed.PedGroup.Contains(ped);
 	}
 }
